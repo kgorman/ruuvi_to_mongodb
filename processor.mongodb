@@ -1,0 +1,63 @@
+s = {
+  $source: {
+    connectionName: "Cluster0",
+    db: "ruuvi_data",
+    coll: "sensor_data",
+  },
+};
+
+rr = { $replaceRoot: { newRoot: "$fullDocument" } };
+
+p = {
+  $project: {
+    mac_address: 1,
+    acceleration_num: {
+      $ifNull: ["$data.acceleration", 0],
+    },
+  },
+};
+
+w = {
+  $tumblingWindow: {
+    interval: {
+      size: 5,
+      unit: "second",
+    },
+    pipeline: [
+      {
+        $group: {
+          _id: "$mac_address",
+          acceleration: {
+            $max: "$acceleration_num",
+          },
+        },
+      },
+    ],
+  },
+};
+
+pp = {
+  $project: {
+    _stream_meta: 0,
+  },
+};
+
+// merge the aggregated data into sensor_data_aggregated collection
+m = {
+  $merge: {
+    into: {
+      connectionName: "Cluster0",
+      db: "ruuvi_data",
+      coll: "sensor_data_aggregated",
+    },
+    on: ["_id"],
+    whenMatched: "replace",
+    whenNotMatched: "insert",
+  },
+};
+
+
+
+
+processor = [s, rr, p, w, pp, m];
+sp.process(processor);
